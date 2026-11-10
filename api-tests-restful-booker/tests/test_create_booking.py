@@ -23,7 +23,8 @@ def test_create_booking(create_booking):
 
 # создание брони с неправильным типом данных
 @pytest.mark.negative
-@pytest.mark.xfail(reason="BUG: сервер не валидирует тип данных")
+@pytest.mark.xfail(strict=True, raises=AssertionError,
+                   reason="Предположение: неверный тип должен давать 400; API принимает данные")
 @pytest.mark.parametrize("field, wrong_data_type", [
     ("totalprice", "not number"),
     ("depositpaid", "yes"),
@@ -39,7 +40,8 @@ def test_create_booking_wrong_type(create_booking, field, wrong_data_type):
 
 # создание брони с невалидными данными
 @pytest.mark.negative
-@pytest.mark.xfail(reason="BUG: сервер не валидирует значения полей")
+@pytest.mark.xfail(strict=True, raises=AssertionError,
+                   reason="Предположение: невалидное значение должно давать 400; API не отклоняет его корректно")
 @pytest.mark.parametrize("field, invalid_data", [
     ("totalprice", -5),
     ("firstname", ""),
@@ -54,7 +56,8 @@ def test_create_booking_invalid_value(create_booking, field, invalid_data):
 
 # создание брони без обязательного поля
 @pytest.mark.negative
-@pytest.mark.xfail(reason="BUG: без обязательного поля сервер отвечает 500 вместо 400")
+@pytest.mark.xfail(strict=True, raises=AssertionError,
+                   reason="Предположение: пропущенное обязательное поле должно давать 400; API отвечает 500")
 @pytest.mark.parametrize("required_field", [
     "firstname", "lastname", "totalprice", "depositpaid", "bookingdates",
 ])
