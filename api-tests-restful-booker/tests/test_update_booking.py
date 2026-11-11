@@ -19,6 +19,9 @@ def test_update_booking_patch(reservation, created_booking):
     assert response.status_code == 200, f"ожидался код 200, но сервер вернул: {response.status_code}"
     # поменялись только переданные поля, остальные остались прежними
     assert response.json() == {**created_booking["payload"], **changes}
+    saved_response = reservation.get_booking(created_booking["id"])
+    assert saved_response.status_code == 200, saved_response.text
+    assert saved_response.json() == {**created_booking["payload"], **changes}
 
 
 @pytest.mark.negative
