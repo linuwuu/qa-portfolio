@@ -1,0 +1,2407 @@
+{
+  "info": {
+    "name": "Petstore API tests",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "description": "API tests for pets in Swagger Petstore.\n\nPositive tests: valid requests. Run any request on its own.\nNegative tests: invalid data or a pet that does not exist. Run any request on its own.\nE2E: connected scenarios. Open Pet life cycle and run the whole scenario from step 1. Current scope is the Pet API workflow, not a full shop process.\n\nEach independent test prepares and removes its own data.\nFor Upload a pet photo, select fixtures/pixel.png in Body if needed.\n\nSome negative tests fail because the public server differs from its API documentation. Details are in NOTES.md.\nSee README.md for a quick start. Scope: Pet API only."
+  },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// Request scripts override these values when needed.",
+          "pm.variables.set('expectedStatus', 200);",
+          "pm.variables.set('checkPetSchema', false);"
+        ]
+      }
+    },
+    {
+      "listen": "test",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "const expectedStatus = Number(pm.variables.get('expectedStatus'));",
+          "pm.test('Status code is ' + expectedStatus, () => pm.response.to.have.status(expectedStatus));",
+          "",
+          "if (pm.response.code === 200) {",
+          "    pm.test('Content-Type is JSON', () => {",
+          "        pm.expect(pm.response.headers.get('Content-Type')).to.match(/application\\/json/i);",
+          "    });",
+          "}",
+          "",
+          "if (pm.variables.get('checkPetSchema') && pm.response.code === 200) {",
+          "    pm.test('Response matches the Pet schema', () => {",
+          "        const schema = JSON.parse(pm.collectionVariables.get('petSchema'));",
+          "        pm.expect(pm.response.json()).to.have.jsonSchema(schema);",
+          "    });",
+          "}"
+        ]
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "https://petstore.swagger.io/v2",
+      "type": "string"
+    },
+    {
+      "key": "apiKey",
+      "value": "special-key",
+      "type": "string"
+    },
+    {
+      "key": "petSchema",
+      "value": "{\n  \"type\": \"object\",\n  \"required\": [\n    \"name\",\n    \"photoUrls\"\n  ],\n  \"properties\": {\n    \"id\": {\n      \"type\": \"integer\"\n    },\n    \"category\": {\n      \"type\": \"object\",\n      \"properties\": {\n        \"id\": {\n          \"type\": \"integer\"\n        },\n        \"name\": {\n          \"type\": \"string\"\n        }\n      }\n    },\n    \"name\": {\n      \"type\": \"string\",\n      \"example\": \"doggie\"\n    },\n    \"photoUrls\": {\n      \"type\": \"array\",\n      \"items\": {\n        \"type\": \"string\"\n      }\n    },\n    \"tags\": {\n      \"type\": \"array\",\n      \"items\": {\n        \"type\": \"object\",\n        \"properties\": {\n          \"id\": {\n            \"type\": \"integer\"\n          },\n          \"name\": {\n            \"type\": \"string\"\n          }\n        }\n      }\n    },\n    \"status\": {\n      \"type\": \"string\",\n      \"description\": \"pet status in the store\",\n      \"enum\": [\n        \"available\",\n        \"pending\",\n        \"sold\"\n      ]\n    }\n  }\n}",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Positive tests",
+      "description": "Valid requests. Run any request with Send, in any order. Each request has its own setup and cleanup.",
+      "item": [
+        {
+          "id": "0814d5ed-d541-5128-9bb5-b06057e40a63",
+          "name": "Create a pet with valid data",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "api_key",
+                "value": "{{apiKey}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/pet",
+            "description": "Send a pet with all defined fields. Compare the response and a separate GET with the sent data, then delete the test pet.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id\": {{petId}},\n  \"name\": \"{{petName}}\",\n  \"photoUrls\": [\n    \"https://example.com/pet.png\"\n  ],\n  \"category\": {\n    \"id\": 1,\n    \"name\": \"{{owner}}\"\n  },\n  \"tags\": [],\n  \"status\": \"available\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "(async () => {",
+                  "    const send = request => new Promise((resolve, reject) => {",
+                  "        const resolved = JSON.parse(pm.variables.replaceIn(JSON.stringify(request)));",
+                  "        pm.sendRequest(resolved, (error, response) => error ? reject(error) : resolve(response));",
+                  "    });",
+                  "    const runId = pm.variables.replaceIn('{{$guid}}');",
+                  "    pm.variables.set('petId', parseInt(runId.replace(/-/g, '').slice(0, 12), 16));",
+                  "    pm.variables.set('petName', 'qa-' + runId);",
+                  "    pm.variables.set('owner', 'qa-' + runId);",
+                  "    const pet = {",
+                  "        id: Number(pm.variables.get('petId')),",
+                  "        name: pm.variables.get('petName'),",
+                  "        photoUrls: ['https://example.com/pet.png'],",
+                  "        category: { id: 1, name: pm.variables.get('owner') },",
+                  "        tags: [],",
+                  "        status: 'available'",
+                  "    };",
+                  "    pm.variables.set('pet', JSON.stringify(pet));",
+                  "    const before = await send({",
+                  "        url: '{{baseUrl}}/pet/{{petId}}',",
+                  "        header: { Accept: 'application/json', api_key: '{{apiKey}}' }",
+                  "    });",
+                  "    pm.test('Setup: ID is not in use', () => pm.expect(before.code).to.equal(404));",
+                  "    if (before.code !== 404) {",
+                  "        pm.execution.skipRequest();",
+                  "        throw new Error('ID is in use or the server is unavailable. Run again.');",
+                  "    }",
+                  "    pm.variables.set('checkPetSchema', true);",
+                  "})().catch(error => {",
+                  "    pm.test('Script completes without errors', () => { throw error; });",
+                  "    pm.execution.skipRequest();",
+                  "});"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "(async () => {",
+                  "    const send = request => new Promise((resolve, reject) => {",
+                  "        const resolved = JSON.parse(pm.variables.replaceIn(JSON.stringify(request)));",
+                  "        pm.sendRequest(resolved, (error, response) => error ? reject(error) : resolve(response));",
+                  "    });",
+                  "    try {",
+                  "        const expected = JSON.parse(pm.variables.replaceIn(pm.request.body.raw));",
+                  "        pm.test('Response matches sent data', () => pm.expect(pm.response.json()).to.deep.include(expected));",
+                  "        const saved = await send({ url: '{{baseUrl}}/pet/{{petId}}', header: { Accept: 'application/json', api_key: '{{apiKey}}' } });",
+                  "        pm.test('Saved pet matches expected data', () => {",
+                  "            pm.expect(saved.code).to.equal(200);",
+                  "            pm.expect(saved.json()).to.have.jsonSchema(JSON.parse(pm.collectionVariables.get('petSchema')));",
+                  "            pm.expect(saved.json()).to.deep.include(expected);",
+                  "        });",
+                  "    } finally {",
+                  "        // Only remove the record created by this test.",
+                  "        const found = await send({ url: '{{baseUrl}}/pet/{{petId}}', header: { api_key: '{{apiKey}}' } });",
+                  "        pm.test('Cleanup: lookup succeeds', () => pm.expect(found.code).to.be.oneOf([200, 404]));",
+                  "        if (found.code === 200) {",
+                  "            const mine = found.json().id === Number(pm.variables.get('petId')) &&",
+                  "                found.json().category?.name === pm.variables.get('owner');",
+                  "            pm.test('Cleanup: pet belongs to this test', () => pm.expect(mine).to.equal(true));",
+                  "            if (mine) {",
+                  "                const removed = await send({ url: '{{baseUrl}}/pet/{{petId}}', method: 'DELETE', header: { api_key: '{{apiKey}}' } });",
+                  "                pm.test('Cleanup: pet is deleted', () => pm.expect(removed.code).to.equal(200));",
+                  "                const gone = await send({ url: '{{baseUrl}}/pet/{{petId}}', header: { api_key: '{{apiKey}}' } });",
+                  "                pm.test('Cleanup: pet is no longer found', () => pm.expect(gone.code).to.equal(404));",
+                  "            }",
+                  "        }",
+                  "    }",
+                  "})().catch(error => {",
+                  "    pm.test('Script completes without errors', () => { throw error; });",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "id": "84d63da5-26e7-57eb-94da-1688ed3f12a2",
+          "name": "Create a pet without tags and status",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "api_key",
+                "value": "{{apiKey}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/pet",
+            "description": "Omit the optional tags and status fields. Keep the required name and photoUrls fields; photoUrls is an empty array. ID and category are included to identify and clean up the test pet. Check the response and saved data.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id\": {{petId}},\n  \"name\": \"{{petName}}\",\n  \"photoUrls\": [],\n  \"category\": {\n    \"id\": 1,\n    \"name\": \"{{owner}}\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "(async () => {",
+                  "    const send = request => new Promise((resolve, reject) => {",
+                  "        const resolved = JSON.parse(pm.variables.replaceIn(JSON.stringify(request)));",
+                  "        pm.sendRequest(resolved, (error, response) => error ? reject(error) : resolve(response));",
+                  "    });",
+                  "    const runId = pm.variables.replaceIn('{{$guid}}');",
+                  "    pm.variables.set('petId', parseInt(runId.replace(/-/g, '').slice(0, 12), 16));",
+                  "    pm.variables.set('petName', 'qa-' + runId);",
+                  "    pm.variables.set('owner', 'qa-' + runId);",
+                  "    const pet = {",
+                  "        id: Number(pm.variables.get('petId')),",
+                  "        name: pm.variables.get('petName'),",
+                  "        photoUrls: ['https://example.com/pet.png'],",
+                  "        category: { id: 1, name: pm.variables.get('owner') },",
+                  "        tags: [],",
+                  "        status: 'available'",
+                  "    };",
+                  "    pm.variables.set('pet', JSON.stringify(pet));",
+                  "    const before = await send({",
+                  "        url: '{{baseUrl}}/pet/{{petId}}',",
+                  "        header: { Accept: 'application/json', api_key: '{{apiKey}}' }",
+                  "    });",
+                  "    pm.test('Setup: ID is not in use', () => pm.expect(before.code).to.equal(404));",
+                  "    if (before.code !== 404) {",
+                  "        pm.execution.skipRequest();",
+                  "        throw new Error('ID is in use or the server is unavailable. Run again.');",
+                  "    }",
+                  "    pm.variables.set('checkPetSchema', true);",
+                  "})().catch(error => {",
+                  "    pm.test('Script completes without errors', () => { throw error; });",
+                  "    pm.execution.skipRequest();",
+                  "});"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "(async () => {",
+                  "    const send = request => new Promise((resolve, reject) => {",
+                  "        const resolved = JSON.parse(pm.variables.replaceIn(JSON.stringify(request)));",
+                  "        pm.sendRequest(resolved, (error, response) => error ? reject(error) : resolve(response));",
+                  "    });",
+                  "    try {",
+                  "        const expected = JSON.parse(pm.variables.replaceIn(pm.request.body.raw));",
+                  "        pm.test('Response matches sent data', () => pm.expect(pm.response.json()).to.deep.include(expected));",
+                  "        const saved = await send({ url: '{{baseUrl}}/pet/{{petId}}', header: { Accept: 'application/json', api_key: '{{apiKey}}' } });",
+                  "        pm.test('Saved pet matches expected data', () => {",
+                  "            pm.expect(saved.code).to.equal(200);",
+                  "            pm.expect(saved.json()).to.have.jsonSchema(JSON.parse(pm.collectionVariables.get('petSchema')));",
+                  "            pm.expect(saved.json()).to.deep.include(expected);",
+                  "        });",
+                  "    } finally {",
+                  "        // Only remove the record created by this test.",
+                  "        const found = await send({ url: '{{baseUrl}}/pet/{{petId}}', header: { api_key: '{{apiKey}}' } });",
+                  "        pm.test('Cleanup: lookup succeeds', () => pm.expect(found.code).to.be.oneOf([200, 404]));",
+                  "        if (found.code === 200) {",
+                  "            const mine = found.json().id === Number(pm.variables.get('petId')) &&",
+                  "                found.json().category?.name === pm.variables.get('owner');",
+                  "            pm.test('Cleanup: pet belongs to this test', () => pm.expect(mine).to.equal(true));",
+                  "            if (mine) {",
+                  "                const removed = await send({ url: '{{baseUrl}}/pet/{{petId}}', method: 'DELETE', header: { api_key: '{{apiKey}}' } });",
+                  "                pm.test('Cleanup: pet is deleted', () => pm.expect(removed.code).to.equal(200));",
+                  "                const gone = await send({ url: '{{baseUrl}}/pet/{{petId}}', header: { api_key: '{{apiKey}}' } });",
+                  "                pm.test('Cleanup: pet is no longer found', () => pm.expect(gone.code).to.equal(404));",
+                  "            }",
+                  "        }",
+                  "    }",
+                  "})().catch(error => {",
+                  "    pm.test('Script completes without errors', () => { throw error; });",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "id": "cd6d5c2e-f119-5fb5-9d91-0394b0aead12",
+          "name": "Get a pet by ID",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "api_key",
+                "value": "{{apiKey}}"
+              }
+            ],
+            "url": "{{baseUrl}}/pet/{{petId}}",
+            "description": "Create a test pet, get it by its ID and compare the returned data with the created pet. Delete the test pet after the check."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "(async () => {",
+                  "    const send = request => new Promise((resolve, reject) => {",
+                  "        const resolved = JSON.parse(pm.variables.replaceIn(JSON.stringify(request)));",
+                  "        pm.sendRequest(resolved, (error, response) => error ? reject(error) : resolve(response));",
+                  "    });",
+                  "    const runId = pm.variables.replaceIn('{{$guid}}');",
+                  "    pm.variables.set('petId', parseInt(runId.replace(/-/g, '').slice(0, 12), 16));",
+                  "    pm.variables.set('petName', 'qa-' + runId);",
+                  "    pm.variables.set('owner', 'qa-' + runId);",
+                  "    const pet = {",
+                  "        id: Number(pm.variables.get('petId')),",
+                  "        name: pm.variables.get('petName'),",
+                  "        photoUrls: ['https://example.com/pet.png'],",
+                  "        category: { id: 1, name: pm.variables.get('owner') },",
+                  "        tags: [],",
+                  "        status: 'available'",
+                  "    };",
+                  "    pm.variables.set('pet', JSON.stringify(pet));",
+                  "    const before = await send({",
+                  "        url: '{{baseUrl}}/pet/{{petId}}',",
+                  "        header: { Accept: 'application/json', api_key: '{{apiKey}}' }",
+                  "    });",
+                  "    pm.test('Setup: ID is not in use', () => pm.expect(before.code).to.equal(404));",
+                  "    if (before.code !== 404) {",
+                  "        pm.execution.skipRequest();",
+                  "        throw new Error('ID is in use or the server is unavailable. Run again.');",
+                  "    }",
+                  "    const created = await send({",
+                  "        url: '{{baseUrl}}/pet', method: 'POST',",
+                  "        header: { 'Content-Type': 'application/json', Accept: 'application/json' },",
+                  "        body: { mode: 'raw', raw: pm.variables.get('pet') }",
+                  "    });",
+                  "    pm.test('Setup: pet is created', () => {",
+                  "        pm.expect(created.code).to.equal(200);",
+                  "        pm.expect(created.json()).to.deep.include(pet);",
+                  "    });",
+                  "    if (created.code !== 200) {",
+                  "        pm.execution.skipRequest();",
+                  "        throw new Error('Cannot create the test pet.');",
+                  "    }",
+                  "    pm.variables.set('checkPetSchema', true);",
+                  "})().catch(error => {",
+                  "    pm.test('Script completes without errors', () => { throw error; });",
+                  "    pm.execution.skipRequest();",
+                  "});"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "(async () => {",
+                  "    const send = request => new Promise((resolve, reject) => {",
+                  "        const resolved = JSON.parse(pm.variables.replaceIn(JSON.stringify(request)));",
+                  "        pm.sendRequest(resolved, (error, response) => error ? reject(error) : resolve(response));",
+                  "    });",
+                  "    try {",
+                  "        const expected = JSON.parse(pm.variables.get('pet'));",
+                  "        pm.test('Response matches the created pet', () => pm.expect(pm.response.json()).to.deep.include(expected));",
+                  "    } finally {",
+                  "        // Only remove the record created by this test.",
+                  "        const found = await send({ url: '{{baseUrl}}/pet/{{petId}}', header: { api_key: '{{apiKey}}' } });",
+                  "        pm.test('Cleanup: lookup succeeds', () => pm.expect(found.code).to.be.oneOf([200, 404]));",
+                  "        if (found.code === 200) {",
+                  "            const mine = found.json().id === Number(pm.variables.get('petId')) &&",
+                  "                found.json().category?.name === pm.variables.get('owner');",
+                  "            pm.test('Cleanup: pet belongs to this test', () => pm.expect(mine).to.equal(true));",
+                  "            if (mine) {",
+                  "                const removed = await send({ url: '{{baseUrl}}/pet/{{petId}}', method: 'DELETE', header: { api_key: '{{apiKey}}' } });",
+                  "                pm.test('Cleanup: pet is deleted', () => pm.expect(removed.code).to.equal(200));",
+                  "                const gone = await send({ url: '{{baseUrl}}/pet/{{petId}}', header: { api_key: '{{apiKey}}' } });",
+                  "                pm.test('Cleanup: pet is no longer found', () => pm.expect(gone.code).to.equal(404));",
+                  "            }",
+                  "        }",
+                  "    }",
+                  "})().catch(error => {",
+                  "    pm.test('Script completes without errors', () => { throw error; });",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "id": "9c464e89-5598-5c32-9c0e-8ff3418f49f4",
+          "name": "Update pet details (PUT)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "api_key",
+                "value": "{{apiKey}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/pet",
+            "description": "Create a test pet. Use PUT to change its name, photoUrls, tags and status. Check the response and read the pet again to confirm the saved changes.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id\": {{petId}},\n  \"name\": \"{{petName}}-updated\",\n  \"photoUrls\": [\n    \"https://example.com/new.png\"\n  ],\n  \"category\": {\n    \"id\": 1,\n    \"name\": \"{{owner}}\"\n  },\n  \"tags\": [\n    {\n      \"id\": 1,\n      \"name\": \"updated\"\n    }\n  ],\n  \"status\": \"pending\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "(async () => {",
+                  "    const send = request => new Promise((resolve, reject) => {",
+                  "        const resolved = JSON.parse(pm.variables.replaceIn(JSON.stringify(request)));",
+                  "        pm.sendRequest(resolved, (error, response) => error ? reject(error) : resolve(response));",
+                  "    });",
+                  "    const runId = pm.variables.replaceIn('{{$guid}}');",
+                  "    pm.variables.set('petId', parseInt(runId.replace(/-/g, '').slice(0, 12), 16));",
+                  "    pm.variables.set('petName', 'qa-' + runId);",
+                  "    pm.variables.set('owner', 'qa-' + runId);",
+                  "    const pet = {",
+                  "        id: Number(pm.variables.get('petId')),",
+                  "        name: pm.variables.get('petName'),",
+                  "        photoUrls: ['https://example.com/pet.png'],",
+                  "        category: { id: 1, name: pm.variables.get('owner') },",
+                  "        tags: [],",
+                  "        status: 'available'",
+                  "    };",
+                  "    pm.variables.set('pet', JSON.stringify(pet));",
+                  "    const before = await send({",
+                  "        url: '{{baseUrl}}/pet/{{petId}}',",
+                  "        header: { Accept: 'application/json', api_key: '{{apiKey}}' }",
+                  "    });",
+                  "    pm.test('Setup: ID is not in use', () => pm.expect(before.code).to.equal(404));",
+                  "    if (before.code !== 404) {",
+                  "        pm.execution.skipRequest();",
+                  "        throw new Error('ID is in use or the server is unavailable. Run again.');",
+                  "    }",
+                  "    const created = await send({",
+                  "        url: '{{baseUrl}}/pet', method: 'POST',",
+                  "        header: { 'Content-Type': 'application/json', Accept: 'application/json' },",
+                  "        body: { mode: 'raw', raw: pm.variables.get('pet') }",
+                  "    });",
+                  "    pm.test('Setup: pet is created', () => {",
+                  "        pm.expect(created.code).to.equal(200);",
+                  "        pm.expect(created.json()).to.deep.include(pet);",
+                  "    });",
+                  "    if (created.code !== 200) {",
+                  "        pm.execution.skipRequest();",
+                  "        throw new Error('Cannot create the test pet.');",
+                  "    }",
+                  "    pm.variables.set('checkPetSchema', true);",
+                  "})().catch(error => {",
+                  "    pm.test('Script completes without errors', () => { throw error; });",
+                  "    pm.execution.skipRequest();",
+                  "});"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "(async () => {",
+                  "    const send = request => new Promise((resolve, reject) => {",
+                  "        const resolved = JSON.parse(pm.variables.replaceIn(JSON.stringify(request)));",
+                  "        pm.sendRequest(resolved, (error, response) => error ? reject(error) : resolve(response));",
+                  "    });",
+                  "    try {",
+                  "        const expected = JSON.parse(pm.variables.replaceIn(pm.request.body.raw));",
+                  "        pm.test('Response matches sent data', () => pm.expect(pm.response.json()).to.deep.include(expected));",
+                  "        const saved = await send({ url: '{{baseUrl}}/pet/{{petId}}', header: { Accept: 'application/json', api_key: '{{apiKey}}' } });",
+                  "        pm.test('Saved pet matches expected data', () => {",
+                  "            pm.expect(saved.code).to.equal(200);",
+                  "            pm.expect(saved.json()).to.have.jsonSchema(JSON.parse(pm.collectionVariables.get('petSchema')));",
+                  "            pm.expect(saved.json()).to.deep.include(expected);",
+                  "        });",
+                  "    } finally {",
+                  "        // Only remove the record created by this test.",
+                  "        const found = await send({ url: '{{baseUrl}}/pet/{{petId}}', header: { api_key: '{{apiKey}}' } });",
+                  "        pm.test('Cleanup: lookup succeeds', () => pm.expect(found.code).to.be.oneOf([200, 404]));",
+                  "        if (found.code === 200) {",
+                  "            const mine = found.json().id === Number(pm.variables.get('petId')) &&",
+                  "                found.json().category?.name === pm.variables.get('owner');",
+                  "            pm.test('Cleanup: pet belongs to this test', () => pm.expect(mine).to.equal(true));",
+                  "            if (mine) {",
+                  "                const removed = await send({ url: '{{baseUrl}}/pet/{{petId}}', method: 'DELETE', header: { api_key: '{{apiKey}}' } });",
+                  "                pm.test('Cleanup: pet is deleted', () => pm.expect(removed.code).to.equal(200));",
+                  "                const gone = await send({ url: '{{baseUrl}}/pet/{{petId}}', header: { api_key: '{{apiKey}}' } });",
+                  "                pm.test('Cleanup: pet is no longer found', () => pm.expect(gone.code).to.equal(404));",
+                  "            }",
+                  "        }",
+                  "    }",
+                  "})().catch(error => {",
+                  "    pm.test('Script completes without errors', () => { throw error; });",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "id": "46a71cd8-c022-5cee-8072-cbf4fb37eb5c",
+          "name": "Find available pets",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "api_key",
+                "value": "{{apiKey}}"
+              }
+            ],
+            "url": "{{baseUrl}}/pet/findByStatus?status=available",
+            "description": "Create an available test pet. Find pets with status=available, check the returned statuses and confirm that the test pet is included."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "(async () => {",
+                  "    const send = request => new Promise((resolve, reject) => {",
+                  "        const resolved = JSON.parse(pm.variables.replaceIn(JSON.stringify(request)));",
+                  "        pm.sendRequest(resolved, (error, response) => error ? reject(error) : resolve(response));",
+                  "    });",
+                  "    const runId = pm.variables.replaceIn('{{$guid}}');",
+                  "    pm.variables.set('petId', parseInt(runId.replace(/-/g, '').slice(0, 12), 16));",
+                  "    pm.variables.set('petName', 'qa-' + runId);",
+                  "    pm.variables.set('owner', 'qa-' + runId);",
+                  "    const pet = {",
+                  "        id: Number(pm.variables.get('petId')),",
+                  "        name: pm.variables.get('petName'),",
+                  "        photoUrls: ['https://example.com/pet.png'],",
+                  "        category: { id: 1, name: pm.variables.get('owner') },",
+                  "        tags: [],",
+                  "        status: 'available'",
+                  "    };",
+                  "    pm.variables.set('pet', JSON.stringify(pet));",
+                  "    const before = await send({",
+                  "        url: '{{baseUrl}}/pet/{{petId}}',",
+                  "        header: { Accept: 'application/json', api_key: '{{apiKey}}' }",
+                  "    });",
+                  "    pm.test('Setup: ID is not in use', () => pm.expect(before.code).to.equal(404));",
+                  "    if (before.code !== 404) {",
+                  "        pm.execution.skipRequest();",
+                  "        throw new Error('ID is in use or the server is unavailable. Run again.');",
+                  "    }",
+                  "    const created = await send({",
+                  "        url: '{{baseUrl}}/pet', method: 'POST',",
+                  "        header: { 'Content-Type': 'application/json', Accept: 'application/json' },",
+                  "        body: { mode: 'raw', raw: pm.variables.get('pet') }",
+                  "    });",
+                  "    pm.test('Setup: pet is created', () => {",
+                  "        pm.expect(created.code).to.equal(200);",
+                  "        pm.expect(created.json()).to.deep.include(pet);",
+                  "    });",
+                  "    if (created.code !== 200) {",
+                  "        pm.execution.skipRequest();",
+                  "        throw new Error('Cannot create the test pet.');",
+                  "    }",
+                  "})().catch(error => {",
+                  "    pm.test('Script completes without errors', () => { throw error; });",
+                  "    pm.execution.skipRequest();",
+                  "});"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "(async () => {",
+                  "    const send = request => new Promise((resolve, reject) => {",
+                  "        const resolved = JSON.parse(pm.variables.replaceIn(JSON.stringify(request)));",
+                  "        pm.sendRequest(resolved, (error, response) => error ? reject(error) : resolve(response));",
+                  "    });",
+                  "    try {",
+                  "        const pets = pm.response.json();",
+                  "        const expected = JSON.parse(pm.variables.get('pet'));",
+                  "        pm.test('All results have status available', () => {",
+                  "            pm.expect(pets).to.be.an('array');",
+                  "            pets.forEach(pet => pm.expect(pet.status).to.equal('available'));",
+                  "        });",
+                  "        pm.test('Results include the test pet', () => {",
+                  "            pm.expect(pets.find(pet => pet.id === expected.id)).to.deep.include(expected);",
+                  "        });",
+                  "    } finally {",
+                  "        // Only remove the record created by this test.",
+                  "        const found = await send({ url: '{{baseUrl}}/pet/{{petId}}', header: { api_key: '{{apiKey}}' } });",
+                  "        pm.test('Cleanup: lookup succeeds', () => pm.expect(found.code).to.be.oneOf([200, 404]));",
+                  "        if (found.code === 200) {",
+                  "            const mine = found.json().id === Number(pm.variables.get('petId')) &&",
+                  "                found.json().category?.name === pm.variables.get('owner');",
+                  "            pm.test('Cleanup: pet belongs to this test', () => pm.expect(mine).to.equal(true));",
+                  "            if (mine) {",
+                  "                const removed = await send({ url: '{{baseUrl}}/pet/{{petId}}', method: 'DELETE', header: { api_key: '{{apiKey}}' } });",
+                  "                pm.test('Cleanup: pet is deleted', () => pm.expect(removed.code).to.equal(200));",
+                  "                const gone = await send({ url: '{{baseUrl}}/pet/{{petId}}', header: { api_key: '{{apiKey}}' } });",
+                  "                pm.test('Cleanup: pet is no longer found', () => pm.expect(gone.code).to.equal(404));",
+                  "            }",
+                  "        }",
+                  "    }",
+                  "})().catch(error => {",
+                  "    pm.test('Script completes without errors', () => { throw error; });",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "id": "0151f6d9-d984-5908-9dd4-4b6ea1c68900",
+          "name": "Find pending pets",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "api_key",
+                "value": "{{apiKey}}"
+              }
+            ],
+            "url": "{{baseUrl}}/pet/findByStatus?status=pending",
+            "description": "Create a pending test pet. Find pets with status=pending, check the returned statuses and confirm that the test pet is included."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "(async () => {",
+                  "    const send = request => new Promise((resolve, reject) => {",
+                  "        const resolved = JSON.parse(pm.variables.replaceIn(JSON.stringify(request)));",
+                  "        pm.sendRequest(resolved, (error, response) => error ? reject(error) : resolve(response));",
+                  "    });",
+                  "    const runId = pm.variables.replaceIn('{{$guid}}');",
+                  "    pm.variables.set('petId', parseInt(runId.replace(/-/g, '').slice(0, 12), 16));",
+                  "    pm.variables.set('petName', 'qa-' + runId);",
+                  "    pm.variables.set('owner', 'qa-' + runId);",
+                  "    const pet = {",
+                  "        id: Number(pm.variables.get('petId')),",
+                  "        name: pm.variables.get('petName'),",
+                  "        photoUrls: ['https://example.com/pet.png'],",
+                  "        category: { id: 1, name: pm.variables.get('owner') },",
+                  "        tags: [],",
+                  "        status: 'pending'",
+                  "    };",
+                  "    pm.variables.set('pet', JSON.stringify(pet));",
+                  "    const before = await send({",
+                  "        url: '{{baseUrl}}/pet/{{petId}}',",
+                  "        header: { Accept: 'application/json', api_key: '{{apiKey}}' }",
+                  "    });",
+                  "    pm.test('Setup: ID is not in use', () => pm.expect(before.code).to.equal(404));",
+                  "    if (before.code !== 404) {",
+                  "        pm.execution.skipRequest();",
+                  "        throw new Error('ID is in use or the server is unavailable. Run again.');",
+                  "    }",
+                  "    const created = await send({",
+                  "        url: '{{baseUrl}}/pet', method: 'POST',",
+                  "        header: { 'Content-Type': 'application/json', Accept: 'application/json' },",
+                  "        body: { mode: 'raw', raw: pm.variables.get('pet') }",
+                  "    });",
+                  "    pm.test('Setup: pet is created', () => {",
+                  "        pm.expect(created.code).to.equal(200);",
+                  "        pm.expect(created.json()).to.deep.include(pet);",
+                  "    });",
+                  "    if (created.code !== 200) {",
+                  "        pm.execution.skipRequest();",
+                  "        throw new Error('Cannot create the test pet.');",
+                  "    }",
+                  "})().catch(error => {",
+                  "    pm.test('Script completes without errors', () => { throw error; });",
+                  "    pm.execution.skipRequest();",
+                  "});"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "(async () => {",
+                  "    const send = request => new Promise((resolve, reject) => {",
+                  "        const resolved = JSON.parse(pm.variables.replaceIn(JSON.stringify(request)));",
+                  "        pm.sendRequest(resolved, (error, response) => error ? reject(error) : resolve(response));",
+                  "    });",
+                  "    try {",
+                  "        const pets = pm.response.json();",
+                  "        const expected = JSON.parse(pm.variables.get('pet'));",
+                  "        pm.test('All results have status pending', () => {",
+                  "            pm.expect(pets).to.be.an('array');",
+                  "            pets.forEach(pet => pm.expect(pet.status).to.equal('pending'));",
+                  "        });",
+                  "        pm.test('Results include the test pet', () => {",
+                  "            pm.expect(pets.find(pet => pet.id === expected.id)).to.deep.include(expected);",
+                  "        });",
+                  "    } finally {",
+                  "        // Only remove the record created by this test.",
+                  "        const found = await send({ url: '{{baseUrl}}/pet/{{petId}}', header: { api_key: '{{apiKey}}' } });",
+                  "        pm.test('Cleanup: lookup succeeds', () => pm.expect(found.code).to.be.oneOf([200, 404]));",
+                  "        if (found.code === 200) {",
+                  "            const mine = found.json().id === Number(pm.variables.get('petId')) &&",
+                  "                found.json().category?.name === pm.variables.get('owner');",
+                  "            pm.test('Cleanup: pet belongs to this test', () => pm.expect(mine).to.equal(true));",
+                  "            if (mine) {",
+                  "                const removed = await send({ url: '{{baseUrl}}/pet/{{petId}}', method: 'DELETE', header: { api_key: '{{apiKey}}' } });",
+                  "                pm.test('Cleanup: pet is deleted', () => pm.expect(removed.code).to.equal(200));",
+                  "                const gone = await send({ url: '{{baseUrl}}/pet/{{petId}}', header: { api_key: '{{apiKey}}' } });",
+                  "                pm.test('Cleanup: pet is no longer found', () => pm.expect(gone.code).to.equal(404));",
+                  "            }",
+                  "        }",
+                  "    }",
+                  "})().catch(error => {",
+                  "    pm.test('Script completes without errors', () => { throw error; });",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "id": "e9f95d1a-a240-54cf-b41c-8f06d01c06e2",
+          "name": "Find sold pets",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "api_key",
+                "value": "{{apiKey}}"
+              }
+            ],
+            "url": "{{baseUrl}}/pet/findByStatus?status=sold",
+            "description": "Create a sold test pet. Find pets with status=sold, check the returned statuses and confirm that the test pet is included."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "(async () => {",
+                  "    const send = request => new Promise((resolve, reject) => {",
+                  "        const resolved = JSON.parse(pm.variables.replaceIn(JSON.stringify(request)));",
+                  "        pm.sendRequest(resolved, (error, response) => error ? reject(error) : resolve(response));",
+                  "    });",
+                  "    const runId = pm.variables.replaceIn('{{$guid}}');",
+                  "    pm.variables.set('petId', parseInt(runId.replace(/-/g, '').slice(0, 12), 16));",
+                  "    pm.variables.set('petName', 'qa-' + runId);",
+                  "    pm.variables.set('owner', 'qa-' + runId);",
+                  "    const pet = {",
+                  "        id: Number(pm.variables.get('petId')),",
+                  "        name: pm.variables.get('petName'),",
+                  "        photoUrls: ['https://example.com/pet.png'],",
+                  "        category: { id: 1, name: pm.variables.get('owner') },",
+                  "        tags: [],",
+                  "        status: 'sold'",
+                  "    };",
+                  "    pm.variables.set('pet', JSON.stringify(pet));",
+                  "    const before = await send({",
+                  "        url: '{{baseUrl}}/pet/{{petId}}',",
+                  "        header: { Accept: 'application/json', api_key: '{{apiKey}}' }",
+                  "    });",
+                  "    pm.test('Setup: ID is not in use', () => pm.expect(before.code).to.equal(404));",
+                  "    if (before.code !== 404) {",
+                  "        pm.execution.skipRequest();",
+                  "        throw new Error('ID is in use or the server is unavailable. Run again.');",
+                  "    }",
+                  "    const created = await send({",
+                  "        url: '{{baseUrl}}/pet', method: 'POST',",
+                  "        header: { 'Content-Type': 'application/json', Accept: 'application/json' },",
+                  "        body: { mode: 'raw', raw: pm.variables.get('pet') }",
+                  "    });",
+                  "    pm.test('Setup: pet is created', () => {",
+                  "        pm.expect(created.code).to.equal(200);",
+                  "        pm.expect(created.json()).to.deep.include(pet);",
+                  "    });",
+                  "    if (created.code !== 200) {",
+                  "        pm.execution.skipRequest();",
+                  "        throw new Error('Cannot create the test pet.');",
+                  "    }",
+                  "})().catch(error => {",
+                  "    pm.test('Script completes without errors', () => { throw error; });",
+                  "    pm.execution.skipRequest();",
+                  "});"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "(async () => {",
+                  "    const send = request => new Promise((resolve, reject) => {",
+                  "        const resolved = JSON.parse(pm.variables.replaceIn(JSON.stringify(request)));",
+                  "        pm.sendRequest(resolved, (error, response) => error ? reject(error) : resolve(response));",
+                  "    });",
+                  "    try {",
+                  "        const pets = pm.response.json();",
+                  "        const expected = JSON.parse(pm.variables.get('pet'));",
+                  "        pm.test('All results have status sold', () => {",
+                  "            pm.expect(pets).to.be.an('array');",
+                  "            pets.forEach(pet => pm.expect(pet.status).to.equal('sold'));",
+                  "        });",
+                  "        pm.test('Results include the test pet', () => {",
+                  "            pm.expect(pets.find(pet => pet.id === expected.id)).to.deep.include(expected);",
+                  "        });",
+                  "    } finally {",
+                  "        // Only remove the record created by this test.",
+                  "        const found = await send({ url: '{{baseUrl}}/pet/{{petId}}', header: { api_key: '{{apiKey}}' } });",
+                  "        pm.test('Cleanup: lookup succeeds', () => pm.expect(found.code).to.be.oneOf([200, 404]));",
+                  "        if (found.code === 200) {",
+                  "            const mine = found.json().id === Number(pm.variables.get('petId')) &&",
+                  "                found.json().category?.name === pm.variables.get('owner');",
+                  "            pm.test('Cleanup: pet belongs to this test', () => pm.expect(mine).to.equal(true));",
+                  "            if (mine) {",
+                  "                const removed = await send({ url: '{{baseUrl}}/pet/{{petId}}', method: 'DELETE', header: { api_key: '{{apiKey}}' } });",
+                  "                pm.test('Cleanup: pet is deleted', () => pm.expect(removed.code).to.equal(200));",
+                  "                const gone = await send({ url: '{{baseUrl}}/pet/{{petId}}', header: { api_key: '{{apiKey}}' } });",
+                  "                pm.test('Cleanup: pet is no longer found', () => pm.expect(gone.code).to.equal(404));",
+                  "            }",
+                  "        }",
+                  "    }",
+                  "})().catch(error => {",
+                  "    pm.test('Script completes without errors', () => { throw error; });",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "id": "5fd7bdbd-578e-57b1-9f3a-4f157c842e61",
+          "name": "Update pet name and status (form data)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "api_key",
+                "value": "{{apiKey}}"
+              }
+            ],
+            "url": "{{baseUrl}}/pet/{{petId}}",
+            "description": "Create a test pet. Send name and status as form data. Read the pet again and check that these fields changed while the other fields stayed the same.",
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                {
+                  "key": "name",
+                  "value": "{{petName}}-form"
+                },
+                {
+                  "key": "status",
+                  "value": "sold"
+                }
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "(async () => {",
+                  "    const send = request => new Promise((resolve, reject) => {",
+                  "        const resolved = JSON.parse(pm.variables.replaceIn(JSON.stringify(request)));",
+                  "        pm.sendRequest(resolved, (error, response) => error ? reject(error) : resolve(response));",
+                  "    });",
+                  "    const runId = pm.variables.replaceIn('{{$guid}}');",
+                  "    pm.variables.set('petId', parseInt(runId.replace(/-/g, '').slice(0, 12), 16));",
+                  "    pm.variables.set('petName', 'qa-' + runId);",
+                  "    pm.variables.set('owner', 'qa-' + runId);",
+                  "    const pet = {",
+                  "        id: Number(pm.variables.get('petId')),",
+                  "        name: pm.variables.get('petName'),",
+                  "        photoUrls: ['https://example.com/pet.png'],",
+                  "        category: { id: 1, name: pm.variables.get('owner') },",
+                  "        tags: [],",
+                  "        status: 'available'",
+                  "    };",
+                  "    pm.variables.set('pet', JSON.stringify(pet));",
+                  "    const before = await send({",
+                  "        url: '{{baseUrl}}/pet/{{petId}}',",
+                  "        header: { Accept: 'application/json', api_key: '{{apiKey}}' }",
+                  "    });",
+                  "    pm.test('Setup: ID is not in use', () => pm.expect(before.code).to.equal(404));",
+                  "    if (before.code !== 404) {",
+                  "        pm.execution.skipRequest();",
+                  "        throw new Error('ID is in use or the server is unavailable. Run again.');",
+                  "    }",
+                  "    const created = await send({",
+                  "        url: '{{baseUrl}}/pet', method: 'POST',",
+                  "        header: { 'Content-Type': 'application/json', Accept: 'application/json' },",
+                  "        body: { mode: 'raw', raw: pm.variables.get('pet') }",
+                  "    });",
+                  "    pm.test('Setup: pet is created', () => {",
+                  "        pm.expect(created.code).to.equal(200);",
+                  "        pm.expect(created.json()).to.deep.include(pet);",
+                  "    });",
+                  "    if (created.code !== 200) {",
+                  "        pm.execution.skipRequest();",
+                  "        throw new Error('Cannot create the test pet.');",
+                  "    }",
+                  "})().catch(error => {",
+                  "    pm.test('Script completes without errors', () => { throw error; });",
+                  "    pm.execution.skipRequest();",
+                  "});"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "(async () => {",
+                  "    const send = request => new Promise((resolve, reject) => {",
+                  "        const resolved = JSON.parse(pm.variables.replaceIn(JSON.stringify(request)));",
+                  "        pm.sendRequest(resolved, (error, response) => error ? reject(error) : resolve(response));",
+                  "    });",
+                  "    try {",
+                  "        const expected = JSON.parse(pm.variables.get('pet'));",
+                  "        expected.name += '-form';",
+                  "        expected.status = 'sold';",
+                  "        const saved = await send({ url: '{{baseUrl}}/pet/{{petId}}', header: { Accept: 'application/json', api_key: '{{apiKey}}' } });",
+                  "        pm.test('Saved pet matches expected data', () => {",
+                  "            pm.expect(saved.code).to.equal(200);",
+                  "            pm.expect(saved.json()).to.have.jsonSchema(JSON.parse(pm.collectionVariables.get('petSchema')));",
+                  "            pm.expect(saved.json()).to.deep.include(expected);",
+                  "        });",
+                  "    } finally {",
+                  "        // Only remove the record created by this test.",
+                  "        const found = await send({ url: '{{baseUrl}}/pet/{{petId}}', header: { api_key: '{{apiKey}}' } });",
+                  "        pm.test('Cleanup: lookup succeeds', () => pm.expect(found.code).to.be.oneOf([200, 404]));",
+                  "        if (found.code === 200) {",
+                  "            const mine = found.json().id === Number(pm.variables.get('petId')) &&",
+                  "                found.json().category?.name === pm.variables.get('owner');",
+                  "            pm.test('Cleanup: pet belongs to this test', () => pm.expect(mine).to.equal(true));",
+                  "            if (mine) {",
+                  "                const removed = await send({ url: '{{baseUrl}}/pet/{{petId}}', method: 'DELETE', header: { api_key: '{{apiKey}}' } });",
+                  "                pm.test('Cleanup: pet is deleted', () => pm.expect(removed.code).to.equal(200));",
+                  "                const gone = await send({ url: '{{baseUrl}}/pet/{{petId}}', header: { api_key: '{{apiKey}}' } });",
+                  "                pm.test('Cleanup: pet is no longer found', () => pm.expect(gone.code).to.equal(404));",
+                  "            }",
+                  "        }",
+                  "    }",
+                  "})().catch(error => {",
+                  "    pm.test('Script completes without errors', () => { throw error; });",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "id": "126c61e2-26c4-5f6c-b833-776904de0b35",
+          "name": "Delete a pet by ID",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "api_key",
+                "value": "{{apiKey}}"
+              }
+            ],
+            "url": "{{baseUrl}}/pet/{{petId}}",
+            "description": "Create a test pet, delete it by ID and confirm that a separate GET returns 404."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "(async () => {",
+                  "    const send = request => new Promise((resolve, reject) => {",
+                  "        const resolved = JSON.parse(pm.variables.replaceIn(JSON.stringify(request)));",
+                  "        pm.sendRequest(resolved, (error, response) => error ? reject(error) : resolve(response));",
+                  "    });",
+                  "    const runId = pm.variables.replaceIn('{{$guid}}');",
+                  "    pm.variables.set('petId', parseInt(runId.replace(/-/g, '').slice(0, 12), 16));",
+                  "    pm.variables.set('petName', 'qa-' + runId);",
+                  "    pm.variables.set('owner', 'qa-' + runId);",
+                  "    const pet = {",
+                  "        id: Number(pm.variables.get('petId')),",
+                  "        name: pm.variables.get('petName'),",
+                  "        photoUrls: ['https://example.com/pet.png'],",
+                  "        category: { id: 1, name: pm.variables.get('owner') },",
+                  "        tags: [],",
+                  "        status: 'available'",
+                  "    };",
+                  "    pm.variables.set('pet', JSON.stringify(pet));",
+                  "    const before = await send({",
+                  "        url: '{{baseUrl}}/pet/{{petId}}',",
+                  "        header: { Accept: 'application/json', api_key: '{{apiKey}}' }",
+                  "    });",
+                  "    pm.test('Setup: ID is not in use', () => pm.expect(before.code).to.equal(404));",
+                  "    if (before.code !== 404) {",
+                  "        pm.execution.skipRequest();",
+                  "        throw new Error('ID is in use or the server is unavailable. Run again.');",
+                  "    }",
+                  "    const created = await send({",
+                  "        url: '{{baseUrl}}/pet', method: 'POST',",
+                  "        header: { 'Content-Type': 'application/json', Accept: 'application/json' },",
+                  "        body: { mode: 'raw', raw: pm.variables.get('pet') }",
+                  "    });",
+                  "    pm.test('Setup: pet is created', () => {",
+                  "        pm.expect(created.code).to.equal(200);",
+                  "        pm.expect(created.json()).to.deep.include(pet);",
+                  "    });",
+                  "    if (created.code !== 200) {",
+                  "        pm.execution.skipRequest();",
+                  "        throw new Error('Cannot create the test pet.');",
+                  "    }",
+                  "})().catch(error => {",
+                  "    pm.test('Script completes without errors', () => { throw error; });",
+                  "    pm.execution.skipRequest();",
+                  "});"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "(async () => {",
+                  "    const send = request => new Promise((resolve, reject) => {",
+                  "        const resolved = JSON.parse(pm.variables.replaceIn(JSON.stringify(request)));",
+                  "        pm.sendRequest(resolved, (error, response) => error ? reject(error) : resolve(response));",
+                  "    });",
+                  "    try {",
+                  "        const gone = await send({ url: '{{baseUrl}}/pet/{{petId}}', header: { api_key: '{{apiKey}}' } });",
+                  "        pm.test('Deleted pet is not found', () => pm.expect(gone.code).to.equal(404));",
+                  "    } finally {",
+                  "        // Only remove the record created by this test.",
+                  "        const found = await send({ url: '{{baseUrl}}/pet/{{petId}}', header: { api_key: '{{apiKey}}' } });",
+                  "        pm.test('Cleanup: lookup succeeds', () => pm.expect(found.code).to.be.oneOf([200, 404]));",
+                  "        if (found.code === 200) {",
+                  "            const mine = found.json().id === Number(pm.variables.get('petId')) &&",
+                  "                found.json().category?.name === pm.variables.get('owner');",
+                  "            pm.test('Cleanup: pet belongs to this test', () => pm.expect(mine).to.equal(true));",
+                  "            if (mine) {",
+                  "                const removed = await send({ url: '{{baseUrl}}/pet/{{petId}}', method: 'DELETE', header: { api_key: '{{apiKey}}' } });",
+                  "                pm.test('Cleanup: pet is deleted', () => pm.expect(removed.code).to.equal(200));",
+                  "                const gone = await send({ url: '{{baseUrl}}/pet/{{petId}}', header: { api_key: '{{apiKey}}' } });",
+                  "                pm.test('Cleanup: pet is no longer found', () => pm.expect(gone.code).to.equal(404));",
+                  "            }",
+                  "        }",
+                  "    }",
+                  "})().catch(error => {",
+                  "    pm.test('Script completes without errors', () => { throw error; });",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "id": "d609b0a5-0ca6-56a8-8a98-35508b477307",
+          "name": "Upload a pet photo",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "api_key",
+                "value": "{{apiKey}}"
+              }
+            ],
+            "url": "{{baseUrl}}/pet/{{petId}}/uploadImage",
+            "description": "Create a test pet and upload fixtures/pixel.png. Check the upload response and confirm that the pet details stay the same. In Postman, select the file in Body if the relative path is not resolved.",
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "additionalMetadata",
+                  "value": "QA upload test",
+                  "type": "text"
+                },
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": "fixtures/pixel.png"
+                }
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "(async () => {",
+                  "    const send = request => new Promise((resolve, reject) => {",
+                  "        const resolved = JSON.parse(pm.variables.replaceIn(JSON.stringify(request)));",
+                  "        pm.sendRequest(resolved, (error, response) => error ? reject(error) : resolve(response));",
+                  "    });",
+                  "    const runId = pm.variables.replaceIn('{{$guid}}');",
+                  "    pm.variables.set('petId', parseInt(runId.replace(/-/g, '').slice(0, 12), 16));",
+                  "    pm.variables.set('petName', 'qa-' + runId);",
+                  "    pm.variables.set('owner', 'qa-' + runId);",
+                  "    const pet = {",
+                  "        id: Number(pm.variables.get('petId')),",
+                  "        name: pm.variables.get('petName'),",
+                  "        photoUrls: ['https://example.com/pet.png'],",
+                  "        category: { id: 1, name: pm.variables.get('owner') },",
+                  "        tags: [],",
+                  "        status: 'available'",
+                  "    };",
+                  "    pm.variables.set('pet', JSON.stringify(pet));",
+                  "    const before = await send({",
+                  "        url: '{{baseUrl}}/pet/{{petId}}',",
+                  "        header: { Accept: 'application/json', api_key: '{{apiKey}}' }",
+                  "    });",
+                  "    pm.test('Setup: ID is not in use', () => pm.expect(before.code).to.equal(404));",
+                  "    if (before.code !== 404) {",
+                  "        pm.execution.skipRequest();",
+                  "        throw new Error('ID is in use or the server is unavailable. Run again.');",
+                  "    }",
+                  "    const created = await send({",
+                  "        url: '{{baseUrl}}/pet', method: 'POST',",
+                  "        header: { 'Content-Type': 'application/json', Accept: 'application/json' },",
+                  "        body: { mode: 'raw', raw: pm.variables.get('pet') }",
+                  "    });",
+                  "    pm.test('Setup: pet is created', () => {",
+                  "        pm.expect(created.code).to.equal(200);",
+                  "        pm.expect(created.json()).to.deep.include(pet);",
+                  "    });",
+                  "    if (created.code !== 200) {",
+                  "        pm.execution.skipRequest();",
+                  "        throw new Error('Cannot create the test pet.');",
+                  "    }",
+                  "})().catch(error => {",
+                  "    pm.test('Script completes without errors', () => { throw error; });",
+                  "    pm.execution.skipRequest();",
+                  "});"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "(async () => {",
+                  "    const send = request => new Promise((resolve, reject) => {",
+                  "        const resolved = JSON.parse(pm.variables.replaceIn(JSON.stringify(request)));",
+                  "        pm.sendRequest(resolved, (error, response) => error ? reject(error) : resolve(response));",
+                  "    });",
+                  "    try {",
+                  "        pm.test('Upload response has a code and message', () => {",
+                  "            pm.expect(pm.response.json().code).to.equal(200);",
+                  "            pm.expect(pm.response.json().message).to.be.a('string').and.not.empty;",
+                  "        });",
+                  "        const expected = JSON.parse(pm.variables.get('pet'));",
+                  "        const saved = await send({ url: '{{baseUrl}}/pet/{{petId}}', header: { Accept: 'application/json', api_key: '{{apiKey}}' } });",
+                  "        pm.test('Saved pet matches expected data', () => {",
+                  "            pm.expect(saved.code).to.equal(200);",
+                  "            pm.expect(saved.json()).to.have.jsonSchema(JSON.parse(pm.collectionVariables.get('petSchema')));",
+                  "            pm.expect(saved.json()).to.deep.include(expected);",
+                  "        });",
+                  "    } finally {",
+                  "        // Only remove the record created by this test.",
+                  "        const found = await send({ url: '{{baseUrl}}/pet/{{petId}}', header: { api_key: '{{apiKey}}' } });",
+                  "        pm.test('Cleanup: lookup succeeds', () => pm.expect(found.code).to.be.oneOf([200, 404]));",
+                  "        if (found.code === 200) {",
+                  "            const mine = found.json().id === Number(pm.variables.get('petId')) &&",
+                  "                found.json().category?.name === pm.variables.get('owner');",
+                  "            pm.test('Cleanup: pet belongs to this test', () => pm.expect(mine).to.equal(true));",
+                  "            if (mine) {",
+                  "                const removed = await send({ url: '{{baseUrl}}/pet/{{petId}}', method: 'DELETE', header: { api_key: '{{apiKey}}' } });",
+                  "                pm.test('Cleanup: pet is deleted', () => pm.expect(removed.code).to.equal(200));",
+                  "                const gone = await send({ url: '{{baseUrl}}/pet/{{petId}}', header: { api_key: '{{apiKey}}' } });",
+                  "                pm.test('Cleanup: pet is no longer found', () => pm.expect(gone.code).to.equal(404));",
+                  "            }",
+                  "        }",
+                  "    }",
+                  "})().catch(error => {",
+                  "    pm.test('Script completes without errors', () => { throw error; });",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "id": "c30db433-df82-5d21-91d2-d6ff6f7ed1b8",
+          "name": "Create a pet with a Cyrillic name and emoji",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "api_key",
+                "value": "{{apiKey}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/pet",
+            "description": "Send name=\"Пуффик 🐾\". Check that the response and saved pet preserve the Cyrillic letters and emoji.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id\": {{petId}},\n  \"name\": \"Пуффик 🐾\",\n  \"photoUrls\": [\n    \"https://example.com/pet.png\"\n  ],\n  \"category\": {\n    \"id\": 1,\n    \"name\": \"{{owner}}\"\n  },\n  \"tags\": [],\n  \"status\": \"available\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "(async () => {",
+                  "    const send = request => new Promise((resolve, reject) => {",
+                  "        const resolved = JSON.parse(pm.variables.replaceIn(JSON.stringify(request)));",
+                  "        pm.sendRequest(resolved, (error, response) => error ? reject(error) : resolve(response));",
+                  "    });",
+                  "    const runId = pm.variables.replaceIn('{{$guid}}');",
+                  "    pm.variables.set('petId', parseInt(runId.replace(/-/g, '').slice(0, 12), 16));",
+                  "    pm.variables.set('petName', 'qa-' + runId);",
+                  "    pm.variables.set('owner', 'qa-' + runId);",
+                  "    const pet = {",
+                  "        id: Number(pm.variables.get('petId')),",
+                  "        name: pm.variables.get('petName'),",
+                  "        photoUrls: ['https://example.com/pet.png'],",
+                  "        category: { id: 1, name: pm.variables.get('owner') },",
+                  "        tags: [],",
+                  "        status: 'available'",
+                  "    };",
+                  "    pm.variables.set('pet', JSON.stringify(pet));",
+                  "    const before = await send({",
+                  "        url: '{{baseUrl}}/pet/{{petId}}',",
+                  "        header: { Accept: 'application/json', api_key: '{{apiKey}}' }",
+                  "    });",
+                  "    pm.test('Setup: ID is not in use', () => pm.expect(before.code).to.equal(404));",
+                  "    if (before.code !== 404) {",
+                  "        pm.execution.skipRequest();",
+                  "        throw new Error('ID is in use or the server is unavailable. Run again.');",
+                  "    }",
+                  "    pm.variables.set('checkPetSchema', true);",
+                  "})().catch(error => {",
+                  "    pm.test('Script completes without errors', () => { throw error; });",
+                  "    pm.execution.skipRequest();",
+                  "});"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "(async () => {",
+                  "    const send = request => new Promise((resolve, reject) => {",
+                  "        const resolved = JSON.parse(pm.variables.replaceIn(JSON.stringify(request)));",
+                  "        pm.sendRequest(resolved, (error, response) => error ? reject(error) : resolve(response));",
+                  "    });",
+                  "    try {",
+                  "        const expected = JSON.parse(pm.variables.replaceIn(pm.request.body.raw));",
+                  "        pm.test('Response matches sent data', () => pm.expect(pm.response.json()).to.deep.include(expected));",
+                  "        const saved = await send({ url: '{{baseUrl}}/pet/{{petId}}', header: { Accept: 'application/json', api_key: '{{apiKey}}' } });",
+                  "        pm.test('Saved pet matches expected data', () => {",
+                  "            pm.expect(saved.code).to.equal(200);",
+                  "            pm.expect(saved.json()).to.have.jsonSchema(JSON.parse(pm.collectionVariables.get('petSchema')));",
+                  "            pm.expect(saved.json()).to.deep.include(expected);",
+                  "        });",
+                  "    } finally {",
+                  "        // Only remove the record created by this test.",
+                  "        const found = await send({ url: '{{baseUrl}}/pet/{{petId}}', header: { api_key: '{{apiKey}}' } });",
+                  "        pm.test('Cleanup: lookup succeeds', () => pm.expect(found.code).to.be.oneOf([200, 404]));",
+                  "        if (found.code === 200) {",
+                  "            const mine = found.json().id === Number(pm.variables.get('petId')) &&",
+                  "                found.json().category?.name === pm.variables.get('owner');",
+                  "            pm.test('Cleanup: pet belongs to this test', () => pm.expect(mine).to.equal(true));",
+                  "            if (mine) {",
+                  "                const removed = await send({ url: '{{baseUrl}}/pet/{{petId}}', method: 'DELETE', header: { api_key: '{{apiKey}}' } });",
+                  "                pm.test('Cleanup: pet is deleted', () => pm.expect(removed.code).to.equal(200));",
+                  "                const gone = await send({ url: '{{baseUrl}}/pet/{{petId}}', header: { api_key: '{{apiKey}}' } });",
+                  "                pm.test('Cleanup: pet is no longer found', () => pm.expect(gone.code).to.equal(404));",
+                  "            }",
+                  "        }",
+                  "    }",
+                  "})().catch(error => {",
+                  "    pm.test('Script completes without errors', () => { throw error; });",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Negative tests",
+      "description": "Invalid values and missing records. Run any request with Send. Seven checks currently fail because the public demo differs from Swagger. See README.md.",
+      "item": [
+        {
+          "id": "eb6f6d3c-78a0-5dfc-8a8a-b3839cda98ce",
+          "name": "Get a pet that does not exist",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "api_key",
+                "value": "{{apiKey}}"
+              }
+            ],
+            "url": "{{baseUrl}}/pet/{{petId}}",
+            "description": "Confirm that a new numeric ID is absent, then request it again. Expect 404 Pet not found."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "(async () => {",
+                  "    const send = request => new Promise((resolve, reject) => {",
+                  "        const resolved = JSON.parse(pm.variables.replaceIn(JSON.stringify(request)));",
+                  "        pm.sendRequest(resolved, (error, response) => error ? reject(error) : resolve(response));",
+                  "    });",
+                  "    const runId = pm.variables.replaceIn('{{$guid}}');",
+                  "    pm.variables.set('petId', parseInt(runId.replace(/-/g, '').slice(0, 12), 16));",
+                  "    pm.variables.set('petName', 'qa-' + runId);",
+                  "    pm.variables.set('owner', 'qa-' + runId);",
+                  "    const pet = {",
+                  "        id: Number(pm.variables.get('petId')),",
+                  "        name: pm.variables.get('petName'),",
+                  "        photoUrls: ['https://example.com/pet.png'],",
+                  "        category: { id: 1, name: pm.variables.get('owner') },",
+                  "        tags: [],",
+                  "        status: 'available'",
+                  "    };",
+                  "    pm.variables.set('pet', JSON.stringify(pet));",
+                  "    const before = await send({",
+                  "        url: '{{baseUrl}}/pet/{{petId}}',",
+                  "        header: { Accept: 'application/json', api_key: '{{apiKey}}' }",
+                  "    });",
+                  "    pm.test('Setup: ID is not in use', () => pm.expect(before.code).to.equal(404));",
+                  "    if (before.code !== 404) {",
+                  "        pm.execution.skipRequest();",
+                  "        throw new Error('ID is in use or the server is unavailable. Run again.');",
+                  "    }",
+                  "    pm.variables.set('expectedStatus', 404);",
+                  "})().catch(error => {",
+                  "    pm.test('Script completes without errors', () => { throw error; });",
+                  "    pm.execution.skipRequest();",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "id": "377f2427-11f1-5ddc-a52a-5c38e8e1fa31",
+          "name": "Get a pet with a non-numeric ID",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "api_key",
+                "value": "{{apiKey}}"
+              }
+            ],
+            "url": "{{baseUrl}}/pet/not-a-number",
+            "description": "Send not-a-number as petId. The path parameter must be an integer. Swagger documents 400; the public demo returned 404 in the recorded run."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.variables.set('expectedStatus', 400);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "id": "ec6a4cbe-d599-53b3-a4a9-632984b983d1",
+          "name": "Delete a pet that does not exist",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "api_key",
+                "value": "{{apiKey}}"
+              }
+            ],
+            "url": "{{baseUrl}}/pet/{{petId}}",
+            "description": "Confirm that a new numeric ID is absent, then try to delete it. Expect 404."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "(async () => {",
+                  "    const send = request => new Promise((resolve, reject) => {",
+                  "        const resolved = JSON.parse(pm.variables.replaceIn(JSON.stringify(request)));",
+                  "        pm.sendRequest(resolved, (error, response) => error ? reject(error) : resolve(response));",
+                  "    });",
+                  "    const runId = pm.variables.replaceIn('{{$guid}}');",
+                  "    pm.variables.set('petId', parseInt(runId.replace(/-/g, '').slice(0, 12), 16));",
+                  "    pm.variables.set('petName', 'qa-' + runId);",
+                  "    pm.variables.set('owner', 'qa-' + runId);",
+                  "    const pet = {",
+                  "        id: Number(pm.variables.get('petId')),",
+                  "        name: pm.variables.get('petName'),",
+                  "        photoUrls: ['https://example.com/pet.png'],",
+                  "        category: { id: 1, name: pm.variables.get('owner') },",
+                  "        tags: [],",
+                  "        status: 'available'",
+                  "    };",
+                  "    pm.variables.set('pet', JSON.stringify(pet));",
+                  "    const before = await send({",
+                  "        url: '{{baseUrl}}/pet/{{petId}}',",
+                  "        header: { Accept: 'application/json', api_key: '{{apiKey}}' }",
+                  "    });",
+                  "    pm.test('Setup: ID is not in use', () => pm.expect(before.code).to.equal(404));",
+                  "    if (before.code !== 404) {",
+                  "        pm.execution.skipRequest();",
+                  "        throw new Error('ID is in use or the server is unavailable. Run again.');",
+                  "    }",
+                  "    pm.variables.set('expectedStatus', 404);",
+                  "})().catch(error => {",
+                  "    pm.test('Script completes without errors', () => { throw error; });",
+                  "    pm.execution.skipRequest();",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "id": "ff0d87c7-110c-57ec-bbd6-fea6d7db93da",
+          "name": "Delete a pet with a non-numeric ID",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "api_key",
+                "value": "{{apiKey}}"
+              }
+            ],
+            "url": "{{baseUrl}}/pet/not-a-number",
+            "description": "Send not-a-number as petId in DELETE. Swagger documents 400 for an invalid ID; the public demo returned 404 in the recorded run."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.variables.set('expectedStatus', 400);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "id": "a5940d8a-f1f5-5d27-976d-b4a289c9383e",
+          "name": "Find pets with an unknown status",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "api_key",
+                "value": "{{apiKey}}"
+              }
+            ],
+            "url": "{{baseUrl}}/pet/findByStatus?status=unknown",
+            "description": "Send status=unknown. Allowed statuses are available, pending and sold. Expect 400; the public demo returned 200 in the recorded run."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.variables.set('expectedStatus', 400);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "id": "c9201742-e8e1-5009-8b6c-59860be7eda4",
+          "name": "Update a pet that does not exist",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "api_key",
+                "value": "{{apiKey}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/pet",
+            "description": "Confirm that a new numeric ID is absent, then send PUT with that ID and valid pet data. Expect 404. In the recorded run, the demo created a pet instead; cleanup removes this test record.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id\": {{petId}},\n  \"name\": \"{{petName}}\",\n  \"photoUrls\": [\n    \"https://example.com/pet.png\"\n  ],\n  \"category\": {\n    \"id\": 1,\n    \"name\": \"{{owner}}\"\n  },\n  \"tags\": [],\n  \"status\": \"available\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "(async () => {",
+                  "    const send = request => new Promise((resolve, reject) => {",
+                  "        const resolved = JSON.parse(pm.variables.replaceIn(JSON.stringify(request)));",
+                  "        pm.sendRequest(resolved, (error, response) => error ? reject(error) : resolve(response));",
+                  "    });",
+                  "    const runId = pm.variables.replaceIn('{{$guid}}');",
+                  "    pm.variables.set('petId', parseInt(runId.replace(/-/g, '').slice(0, 12), 16));",
+                  "    pm.variables.set('petName', 'qa-' + runId);",
+                  "    pm.variables.set('owner', 'qa-' + runId);",
+                  "    const pet = {",
+                  "        id: Number(pm.variables.get('petId')),",
+                  "        name: pm.variables.get('petName'),",
+                  "        photoUrls: ['https://example.com/pet.png'],",
+                  "        category: { id: 1, name: pm.variables.get('owner') },",
+                  "        tags: [],",
+                  "        status: 'available'",
+                  "    };",
+                  "    pm.variables.set('pet', JSON.stringify(pet));",
+                  "    const before = await send({",
+                  "        url: '{{baseUrl}}/pet/{{petId}}',",
+                  "        header: { Accept: 'application/json', api_key: '{{apiKey}}' }",
+                  "    });",
+                  "    pm.test('Setup: ID is not in use', () => pm.expect(before.code).to.equal(404));",
+                  "    if (before.code !== 404) {",
+                  "        pm.execution.skipRequest();",
+                  "        throw new Error('ID is in use or the server is unavailable. Run again.');",
+                  "    }",
+                  "    pm.variables.set('expectedStatus', 404);",
+                  "})().catch(error => {",
+                  "    pm.test('Script completes without errors', () => { throw error; });",
+                  "    pm.execution.skipRequest();",
+                  "});"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "(async () => {",
+                  "    const send = request => new Promise((resolve, reject) => {",
+                  "        const resolved = JSON.parse(pm.variables.replaceIn(JSON.stringify(request)));",
+                  "        pm.sendRequest(resolved, (error, response) => error ? reject(error) : resolve(response));",
+                  "    });",
+                  "    // Only remove the record created by this test.",
+                  "    const found = await send({ url: '{{baseUrl}}/pet/{{petId}}', header: { api_key: '{{apiKey}}' } });",
+                  "    pm.test('Cleanup: lookup succeeds', () => pm.expect(found.code).to.be.oneOf([200, 404]));",
+                  "    if (found.code === 200) {",
+                  "        const mine = found.json().id === Number(pm.variables.get('petId')) &&",
+                  "            found.json().category?.name === pm.variables.get('owner');",
+                  "        pm.test('Cleanup: pet belongs to this test', () => pm.expect(mine).to.equal(true));",
+                  "        if (mine) {",
+                  "            const removed = await send({ url: '{{baseUrl}}/pet/{{petId}}', method: 'DELETE', header: { api_key: '{{apiKey}}' } });",
+                  "            pm.test('Cleanup: pet is deleted', () => pm.expect(removed.code).to.equal(200));",
+                  "            const gone = await send({ url: '{{baseUrl}}/pet/{{petId}}', header: { api_key: '{{apiKey}}' } });",
+                  "            pm.test('Cleanup: pet is no longer found', () => pm.expect(gone.code).to.equal(404));",
+                  "        }",
+                  "    }",
+                  "})().catch(error => {",
+                  "    pm.test('Script completes without errors', () => { throw error; });",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "id": "49b4a66a-22fa-5fd0-bdf7-4f8725a8def8",
+          "name": "Create a pet without the name field",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "api_key",
+                "value": "{{apiKey}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/pet",
+            "description": "Leave the required name field out of the JSON body. This checks an absent field, not an empty string. POST documents 405 Invalid input; the demo accepted the body in the recorded run.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id\": {{petId}},\n  \"photoUrls\": [\n    \"https://example.com/pet.png\"\n  ],\n  \"category\": {\n    \"id\": 1,\n    \"name\": \"{{owner}}\"\n  },\n  \"tags\": [],\n  \"status\": \"available\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "(async () => {",
+                  "    const send = request => new Promise((resolve, reject) => {",
+                  "        const resolved = JSON.parse(pm.variables.replaceIn(JSON.stringify(request)));",
+                  "        pm.sendRequest(resolved, (error, response) => error ? reject(error) : resolve(response));",
+                  "    });",
+                  "    const runId = pm.variables.replaceIn('{{$guid}}');",
+                  "    pm.variables.set('petId', parseInt(runId.replace(/-/g, '').slice(0, 12), 16));",
+                  "    pm.variables.set('petName', 'qa-' + runId);",
+                  "    pm.variables.set('owner', 'qa-' + runId);",
+                  "    const pet = {",
+                  "        id: Number(pm.variables.get('petId')),",
+                  "        name: pm.variables.get('petName'),",
+                  "        photoUrls: ['https://example.com/pet.png'],",
+                  "        category: { id: 1, name: pm.variables.get('owner') },",
+                  "        tags: [],",
+                  "        status: 'available'",
+                  "    };",
+                  "    pm.variables.set('pet', JSON.stringify(pet));",
+                  "    const before = await send({",
+                  "        url: '{{baseUrl}}/pet/{{petId}}',",
+                  "        header: { Accept: 'application/json', api_key: '{{apiKey}}' }",
+                  "    });",
+                  "    pm.test('Setup: ID is not in use', () => pm.expect(before.code).to.equal(404));",
+                  "    if (before.code !== 404) {",
+                  "        pm.execution.skipRequest();",
+                  "        throw new Error('ID is in use or the server is unavailable. Run again.');",
+                  "    }",
+                  "    pm.variables.set('expectedStatus', 405);",
+                  "})().catch(error => {",
+                  "    pm.test('Script completes without errors', () => { throw error; });",
+                  "    pm.execution.skipRequest();",
+                  "});"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "(async () => {",
+                  "    const send = request => new Promise((resolve, reject) => {",
+                  "        const resolved = JSON.parse(pm.variables.replaceIn(JSON.stringify(request)));",
+                  "        pm.sendRequest(resolved, (error, response) => error ? reject(error) : resolve(response));",
+                  "    });",
+                  "    // Only remove the record created by this test.",
+                  "    const found = await send({ url: '{{baseUrl}}/pet/{{petId}}', header: { api_key: '{{apiKey}}' } });",
+                  "    pm.test('Cleanup: lookup succeeds', () => pm.expect(found.code).to.be.oneOf([200, 404]));",
+                  "    if (found.code === 200) {",
+                  "        const mine = found.json().id === Number(pm.variables.get('petId')) &&",
+                  "            found.json().category?.name === pm.variables.get('owner');",
+                  "        pm.test('Cleanup: pet belongs to this test', () => pm.expect(mine).to.equal(true));",
+                  "        if (mine) {",
+                  "            const removed = await send({ url: '{{baseUrl}}/pet/{{petId}}', method: 'DELETE', header: { api_key: '{{apiKey}}' } });",
+                  "            pm.test('Cleanup: pet is deleted', () => pm.expect(removed.code).to.equal(200));",
+                  "            const gone = await send({ url: '{{baseUrl}}/pet/{{petId}}', header: { api_key: '{{apiKey}}' } });",
+                  "            pm.test('Cleanup: pet is no longer found', () => pm.expect(gone.code).to.equal(404));",
+                  "        }",
+                  "    }",
+                  "})().catch(error => {",
+                  "    pm.test('Script completes without errors', () => { throw error; });",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "id": "a4d326ed-f7e7-5627-9c56-f8b98e02a454",
+          "name": "Create a pet without the photoUrls field",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "api_key",
+                "value": "{{apiKey}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/pet",
+            "description": "Leave the required photoUrls field out of the JSON body. This checks an absent field, not an empty array. POST documents 405 Invalid input; the demo accepted the body in the recorded run.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id\": {{petId}},\n  \"name\": \"{{petName}}\",\n  \"category\": {\n    \"id\": 1,\n    \"name\": \"{{owner}}\"\n  },\n  \"tags\": [],\n  \"status\": \"available\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "(async () => {",
+                  "    const send = request => new Promise((resolve, reject) => {",
+                  "        const resolved = JSON.parse(pm.variables.replaceIn(JSON.stringify(request)));",
+                  "        pm.sendRequest(resolved, (error, response) => error ? reject(error) : resolve(response));",
+                  "    });",
+                  "    const runId = pm.variables.replaceIn('{{$guid}}');",
+                  "    pm.variables.set('petId', parseInt(runId.replace(/-/g, '').slice(0, 12), 16));",
+                  "    pm.variables.set('petName', 'qa-' + runId);",
+                  "    pm.variables.set('owner', 'qa-' + runId);",
+                  "    const pet = {",
+                  "        id: Number(pm.variables.get('petId')),",
+                  "        name: pm.variables.get('petName'),",
+                  "        photoUrls: ['https://example.com/pet.png'],",
+                  "        category: { id: 1, name: pm.variables.get('owner') },",
+                  "        tags: [],",
+                  "        status: 'available'",
+                  "    };",
+                  "    pm.variables.set('pet', JSON.stringify(pet));",
+                  "    const before = await send({",
+                  "        url: '{{baseUrl}}/pet/{{petId}}',",
+                  "        header: { Accept: 'application/json', api_key: '{{apiKey}}' }",
+                  "    });",
+                  "    pm.test('Setup: ID is not in use', () => pm.expect(before.code).to.equal(404));",
+                  "    if (before.code !== 404) {",
+                  "        pm.execution.skipRequest();",
+                  "        throw new Error('ID is in use or the server is unavailable. Run again.');",
+                  "    }",
+                  "    pm.variables.set('expectedStatus', 405);",
+                  "})().catch(error => {",
+                  "    pm.test('Script completes without errors', () => { throw error; });",
+                  "    pm.execution.skipRequest();",
+                  "});"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "(async () => {",
+                  "    const send = request => new Promise((resolve, reject) => {",
+                  "        const resolved = JSON.parse(pm.variables.replaceIn(JSON.stringify(request)));",
+                  "        pm.sendRequest(resolved, (error, response) => error ? reject(error) : resolve(response));",
+                  "    });",
+                  "    // Only remove the record created by this test.",
+                  "    const found = await send({ url: '{{baseUrl}}/pet/{{petId}}', header: { api_key: '{{apiKey}}' } });",
+                  "    pm.test('Cleanup: lookup succeeds', () => pm.expect(found.code).to.be.oneOf([200, 404]));",
+                  "    if (found.code === 200) {",
+                  "        const mine = found.json().id === Number(pm.variables.get('petId')) &&",
+                  "            found.json().category?.name === pm.variables.get('owner');",
+                  "        pm.test('Cleanup: pet belongs to this test', () => pm.expect(mine).to.equal(true));",
+                  "        if (mine) {",
+                  "            const removed = await send({ url: '{{baseUrl}}/pet/{{petId}}', method: 'DELETE', header: { api_key: '{{apiKey}}' } });",
+                  "            pm.test('Cleanup: pet is deleted', () => pm.expect(removed.code).to.equal(200));",
+                  "            const gone = await send({ url: '{{baseUrl}}/pet/{{petId}}', header: { api_key: '{{apiKey}}' } });",
+                  "            pm.test('Cleanup: pet is no longer found', () => pm.expect(gone.code).to.equal(404));",
+                  "        }",
+                  "    }",
+                  "})().catch(error => {",
+                  "    pm.test('Script completes without errors', () => { throw error; });",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "id": "211e3a12-3933-550c-a9f1-0e683022ff02",
+          "name": "Create a pet with an unknown status",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "api_key",
+                "value": "{{apiKey}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/pet",
+            "description": "Send status=\"unknown\" instead of available, pending or sold. POST documents 405 Invalid input; the demo accepted the body in the recorded run.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id\": {{petId}},\n  \"name\": \"{{petName}}\",\n  \"photoUrls\": [\n    \"https://example.com/pet.png\"\n  ],\n  \"category\": {\n    \"id\": 1,\n    \"name\": \"{{owner}}\"\n  },\n  \"tags\": [],\n  \"status\": \"unknown\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "(async () => {",
+                  "    const send = request => new Promise((resolve, reject) => {",
+                  "        const resolved = JSON.parse(pm.variables.replaceIn(JSON.stringify(request)));",
+                  "        pm.sendRequest(resolved, (error, response) => error ? reject(error) : resolve(response));",
+                  "    });",
+                  "    const runId = pm.variables.replaceIn('{{$guid}}');",
+                  "    pm.variables.set('petId', parseInt(runId.replace(/-/g, '').slice(0, 12), 16));",
+                  "    pm.variables.set('petName', 'qa-' + runId);",
+                  "    pm.variables.set('owner', 'qa-' + runId);",
+                  "    const pet = {",
+                  "        id: Number(pm.variables.get('petId')),",
+                  "        name: pm.variables.get('petName'),",
+                  "        photoUrls: ['https://example.com/pet.png'],",
+                  "        category: { id: 1, name: pm.variables.get('owner') },",
+                  "        tags: [],",
+                  "        status: 'available'",
+                  "    };",
+                  "    pm.variables.set('pet', JSON.stringify(pet));",
+                  "    const before = await send({",
+                  "        url: '{{baseUrl}}/pet/{{petId}}',",
+                  "        header: { Accept: 'application/json', api_key: '{{apiKey}}' }",
+                  "    });",
+                  "    pm.test('Setup: ID is not in use', () => pm.expect(before.code).to.equal(404));",
+                  "    if (before.code !== 404) {",
+                  "        pm.execution.skipRequest();",
+                  "        throw new Error('ID is in use or the server is unavailable. Run again.');",
+                  "    }",
+                  "    pm.variables.set('expectedStatus', 405);",
+                  "})().catch(error => {",
+                  "    pm.test('Script completes without errors', () => { throw error; });",
+                  "    pm.execution.skipRequest();",
+                  "});"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "(async () => {",
+                  "    const send = request => new Promise((resolve, reject) => {",
+                  "        const resolved = JSON.parse(pm.variables.replaceIn(JSON.stringify(request)));",
+                  "        pm.sendRequest(resolved, (error, response) => error ? reject(error) : resolve(response));",
+                  "    });",
+                  "    // Only remove the record created by this test.",
+                  "    const found = await send({ url: '{{baseUrl}}/pet/{{petId}}', header: { api_key: '{{apiKey}}' } });",
+                  "    pm.test('Cleanup: lookup succeeds', () => pm.expect(found.code).to.be.oneOf([200, 404]));",
+                  "    if (found.code === 200) {",
+                  "        const mine = found.json().id === Number(pm.variables.get('petId')) &&",
+                  "            found.json().category?.name === pm.variables.get('owner');",
+                  "        pm.test('Cleanup: pet belongs to this test', () => pm.expect(mine).to.equal(true));",
+                  "        if (mine) {",
+                  "            const removed = await send({ url: '{{baseUrl}}/pet/{{petId}}', method: 'DELETE', header: { api_key: '{{apiKey}}' } });",
+                  "            pm.test('Cleanup: pet is deleted', () => pm.expect(removed.code).to.equal(200));",
+                  "            const gone = await send({ url: '{{baseUrl}}/pet/{{petId}}', header: { api_key: '{{apiKey}}' } });",
+                  "            pm.test('Cleanup: pet is no longer found', () => pm.expect(gone.code).to.equal(404));",
+                  "        }",
+                  "    }",
+                  "})().catch(error => {",
+                  "    pm.test('Script completes without errors', () => { throw error; });",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "E2E",
+      "description": "Connected scenarios. Current scope: one Pet API workflow. It checks the pet life cycle, not a complete end-to-end shop process. Run each scenario folder as a whole.",
+      "item": [
+        {
+          "name": "Pet life cycle",
+          "description": "Sequential Pet API workflow: create, read, update, find and delete the same pet. Run all seven steps from step 1. This checks resource state, not a complete shop purchase.",
+          "item": [
+            {
+              "id": "a7e4121d-427a-5a0e-a174-00641161be1b",
+              "name": "1. Create an available pet",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "api_key",
+                    "value": "{{apiKey}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/pet",
+                "description": "Start the scenario by creating a unique pet with status=available. Run this scenario folder from step 1.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"id\": {{petId}},\n  \"name\": \"{{petName}}\",\n  \"photoUrls\": [\n    \"https://example.com/pet.png\"\n  ],\n  \"category\": {\n    \"id\": 1,\n    \"name\": \"{{owner}}\"\n  },\n  \"tags\": [],\n  \"status\": \"available\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": [],
+              "event": [
+                {
+                  "listen": "prerequest",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "(async () => {",
+                      "    const send = request => new Promise((resolve, reject) => {",
+                      "        const resolved = JSON.parse(pm.variables.replaceIn(JSON.stringify(request)));",
+                      "        pm.sendRequest(resolved, (error, response) => error ? reject(error) : resolve(response));",
+                      "    });",
+                      "    const runId = pm.variables.replaceIn('{{$guid}}');",
+                      "    pm.variables.set('petId', parseInt(runId.replace(/-/g, '').slice(0, 12), 16));",
+                      "    pm.variables.set('petName', 'qa-' + runId);",
+                      "    pm.variables.set('owner', 'qa-' + runId);",
+                      "    const pet = {",
+                      "        id: Number(pm.variables.get('petId')),",
+                      "        name: pm.variables.get('petName'),",
+                      "        photoUrls: ['https://example.com/pet.png'],",
+                      "        category: { id: 1, name: pm.variables.get('owner') },",
+                      "        tags: [],",
+                      "        status: 'available'",
+                      "    };",
+                      "    pm.variables.set('pet', JSON.stringify(pet));",
+                      "    const before = await send({",
+                      "        url: '{{baseUrl}}/pet/{{petId}}',",
+                      "        header: { Accept: 'application/json', api_key: '{{apiKey}}' }",
+                      "    });",
+                      "    pm.test('Setup: ID is not in use', () => pm.expect(before.code).to.equal(404));",
+                      "    if (before.code !== 404) {",
+                      "        pm.execution.skipRequest();",
+                      "        throw new Error('ID is in use or the server is unavailable. Run again.');",
+                      "    }",
+                      "    pm.variables.set('flowPet', JSON.stringify(pet));",
+                      "    pm.variables.set('checkPetSchema', true);",
+                      "    pm.variables.set('flowName', pet.name);",
+                      "})().catch(error => {",
+                      "    pm.test('Script completes without errors', () => { throw error; });",
+                      "    pm.execution.skipRequest();",
+                      "});"
+                    ]
+                  }
+                },
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "const expected = JSON.parse(pm.variables.get('flowPet'));",
+                      "pm.test('Pet matches the scenario data', () => pm.expect(pm.response.json()).to.deep.include(expected));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "id": "efe5af92-ce09-5df1-bff0-81243fa2ce21",
+              "name": "2. Get the created pet by ID",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "api_key",
+                    "value": "{{apiKey}}"
+                  }
+                ],
+                "url": "{{baseUrl}}/pet/{{petId}}",
+                "description": "Get the pet created in step 1 and check its saved data, including status=available."
+              },
+              "response": [],
+              "event": [
+                {
+                  "listen": "prerequest",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "const pet = JSON.parse(pm.variables.get('flowPet'));",
+                      "pm.variables.set('petId', pet.id);",
+                      "pm.variables.set('owner', pet.category.name);",
+                      "pm.variables.set('checkPetSchema', true);"
+                    ]
+                  }
+                },
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "const expected = JSON.parse(pm.variables.get('flowPet'));",
+                      "pm.test('Pet matches the scenario data', () => pm.expect(pm.response.json()).to.deep.include(expected));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "id": "bea382e2-a1d3-512c-8d47-e123536012df",
+              "name": "3. Change pet status to sold",
+              "request": {
+                "method": "PUT",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "api_key",
+                    "value": "{{apiKey}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/pet",
+                "description": "Use PUT to change the same pet from available to sold. Keep its other data unchanged.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"id\": {{petId}},\n  \"name\": \"{{flowName}}\",\n  \"photoUrls\": [\n    \"https://example.com/pet.png\"\n  ],\n  \"category\": {\n    \"id\": 1,\n    \"name\": \"{{owner}}\"\n  },\n  \"tags\": [],\n  \"status\": \"sold\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": [],
+              "event": [
+                {
+                  "listen": "prerequest",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "const pet = JSON.parse(pm.variables.get('flowPet'));",
+                      "pm.variables.set('petId', pet.id);",
+                      "pm.variables.set('owner', pet.category.name);",
+                      "pet.status = 'sold';",
+                      "pm.variables.set('flowPet', JSON.stringify(pet));",
+                      "pm.variables.set('checkPetSchema', true);"
+                    ]
+                  }
+                },
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "const expected = JSON.parse(pm.variables.get('flowPet'));",
+                      "pm.test('Pet matches the scenario data', () => pm.expect(pm.response.json()).to.deep.include(expected));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "id": "73ed3e08-1fdf-5f88-a05b-055369d89236",
+              "name": "4. Get the pet and check its sold status",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "api_key",
+                    "value": "{{apiKey}}"
+                  }
+                ],
+                "url": "{{baseUrl}}/pet/{{petId}}",
+                "description": "Get the pet by ID and check that status=sold was saved and the other fields stayed unchanged."
+              },
+              "response": [],
+              "event": [
+                {
+                  "listen": "prerequest",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "const pet = JSON.parse(pm.variables.get('flowPet'));",
+                      "pm.variables.set('petId', pet.id);",
+                      "pm.variables.set('owner', pet.category.name);",
+                      "pm.variables.set('checkPetSchema', true);"
+                    ]
+                  }
+                },
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "const expected = JSON.parse(pm.variables.get('flowPet'));",
+                      "pm.test('Pet matches the scenario data', () => pm.expect(pm.response.json()).to.deep.include(expected));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "id": "cdb71ac7-cebf-54e7-b013-9972dbe1952c",
+              "name": "5. Find the pet in sold results",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "api_key",
+                    "value": "{{apiKey}}"
+                  }
+                ],
+                "url": "{{baseUrl}}/pet/findByStatus?status=sold",
+                "description": "Find pets with status=sold and check that the scenario pet is present with the expected data."
+              },
+              "response": [],
+              "event": [
+                {
+                  "listen": "prerequest",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "const pet = JSON.parse(pm.variables.get('flowPet'));",
+                      "pm.variables.set('petId', pet.id);",
+                      "pm.variables.set('owner', pet.category.name);"
+                    ]
+                  }
+                },
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "const expected = JSON.parse(pm.variables.get('flowPet'));",
+                      "pm.test('Results include the sold pet', () => {",
+                      "    const pets = pm.response.json();",
+                      "    pm.expect(pets).to.be.an('array');",
+                      "    pm.expect(pets.find(pet => pet.id === expected.id)).to.deep.include(expected);",
+                      "});"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "id": "d3da5c89-5966-5946-89a4-c50503761f7a",
+              "name": "6. Delete the pet",
+              "request": {
+                "method": "DELETE",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "api_key",
+                    "value": "{{apiKey}}"
+                  }
+                ],
+                "url": "{{baseUrl}}/pet/{{petId}}",
+                "description": "Delete the scenario pet. Step 7 checks that it can no longer be found."
+              },
+              "response": [],
+              "event": [
+                {
+                  "listen": "prerequest",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "const pet = JSON.parse(pm.variables.get('flowPet'));",
+                      "pm.variables.set('petId', pet.id);",
+                      "pm.variables.set('owner', pet.category.name);"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "id": "da982438-3274-570d-8af6-3425efe137e8",
+              "name": "7. Get the deleted pet - expect 404",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "api_key",
+                    "value": "{{apiKey}}"
+                  }
+                ],
+                "url": "{{baseUrl}}/pet/{{petId}}",
+                "description": "Request the deleted pet by ID and expect 404. Cleanup checks for any remaining test record and removes it if ownership matches."
+              },
+              "response": [],
+              "event": [
+                {
+                  "listen": "prerequest",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "const pet = JSON.parse(pm.variables.get('flowPet'));",
+                      "pm.variables.set('petId', pet.id);",
+                      "pm.variables.set('owner', pet.category.name);",
+                      "pm.variables.set('expectedStatus', 404);"
+                    ]
+                  }
+                },
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "(async () => {",
+                      "    const send = request => new Promise((resolve, reject) => {",
+                      "        const resolved = JSON.parse(pm.variables.replaceIn(JSON.stringify(request)));",
+                      "        pm.sendRequest(resolved, (error, response) => error ? reject(error) : resolve(response));",
+                      "    });",
+                      "    // Only remove the record created by this test.",
+                      "    const found = await send({ url: '{{baseUrl}}/pet/{{petId}}', header: { api_key: '{{apiKey}}' } });",
+                      "    pm.test('Cleanup: lookup succeeds', () => pm.expect(found.code).to.be.oneOf([200, 404]));",
+                      "    if (found.code === 200) {",
+                      "        const mine = found.json().id === Number(pm.variables.get('petId')) &&",
+                      "            found.json().category?.name === pm.variables.get('owner');",
+                      "        pm.test('Cleanup: pet belongs to this test', () => pm.expect(mine).to.equal(true));",
+                      "        if (mine) {",
+                      "            const removed = await send({ url: '{{baseUrl}}/pet/{{petId}}', method: 'DELETE', header: { api_key: '{{apiKey}}' } });",
+                      "            pm.test('Cleanup: pet is deleted', () => pm.expect(removed.code).to.equal(200));",
+                      "            const gone = await send({ url: '{{baseUrl}}/pet/{{petId}}', header: { api_key: '{{apiKey}}' } });",
+                      "            pm.test('Cleanup: pet is no longer found', () => pm.expect(gone.code).to.equal(404));",
+                      "        }",
+                      "    }",
+                      "})().catch(error => {",
+                      "    pm.test('Script completes without errors', () => { throw error; });",
+                      "});"
+                    ]
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
